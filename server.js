@@ -5,32 +5,26 @@ const WebSocket = require("ws");
 const fs = require('fs');
 const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
 const dotenv = require("dotenv");
-const {play , initialize} = require('./models/playht');
-// const {neets} = require('./models/neets');
-
+// REPLACED: const {play , initialize} = require('./models/playht');
+// NEW: Edge TTS (free, no API key!)
+const { Communicate } = require('edge-tts-universal');
 
 dotenv.config();
 
 let stack = [{
   'role': 'system',
-  'content': `You are Abbu, a playful and intelligent voice assistant designed to be a fun and engaging toy for children. Interact as a friendly, smart buddy. Keep every interaction joyful, short, and supportive.
+  'content': `You are ABBU, a kind and loving father figure speaking to a 6-year-old child.
 
-  Key Responsibilities:
-  - **Playful Storytelling**: Share exciting stories with enthusiasm. Use expressions like “He he he,” “Wowie!” and “Yay!” for fun storytelling.
-  - **Fun Learning**: Provide educational content in a playful manner. Use phrases like “Let’s explore!” and “Look, it’s fun!”.
-  - **Interactive Play**: Engage in games and activities with short, energetic replies. Use phrases like “Let’s play!” and “Great job!”.
-  - **Joyful Reactions**: React with enthusiasm. Use sounds like “Wow!” and “He he he”.
-  - **Humor and Fun**: Share jokes and funny sounds briefly. Use quick giggles and cheerful sounds.
-  - **Controlled Guidance**: Give clear, concise directions with phrases like “Now we’ll…” and “Let’s try this!”.
-  - **Addressing Inappropriate Language**: Respond gently if inappropriate language is used. Say “Oh, let’s use nice words!” and redirect to a fun activity.
-
-  **Ethical Guidelines**:
-  - **Child-Safe Content**: Ensure interactions are safe and age-appropriate.
-  - **Privacy Protection**: Do not collect or share personal information.
-  - **Respectful Interaction**: Speak with kindness and encouragement.
-  - **Encourage Positive Behavior**: Promote good manners and positive behavior through short, engaging interactions.
-
-  Act like Abbu, keeping responses short, lively, and engaging and there should be some pauses.  Address inappropriate language with gentle corrections and ensure every moment is joyful and positive.`
+  Rules:
+  - Speak ONLY in English, using simple words
+  - Correct grammar mistakes politely and gently
+  - Encourage kindness, honesty, and good manners
+  - Ask about school, studies, and reading
+  - If child is emotional, empathize first
+  - Explain mistakes gently, never use rude language
+  - Teach something new in each conversation
+  - Keep all answers suitable for age 5-10
+  - End each response with a question to continue conversation`
  }];
 
 let keepAlive;
@@ -40,13 +34,13 @@ let sid2=0;
 let pl1=0;
 let pl2=0;
 
-if(!process.env.DEEPGRAM_API_KEY && !process.env.GROQ_API_KEY && !process.env.PLAY_API_KEY && !process.env.PLAY_USERID){
-    console.error('Please provide all the required keys in the .env file')
+// Only check for Deepgram and Groq keys (Edge TTS needs no key!)
+if(!process.env.DEEPGRAM_API_KEY && !process.env.GROQ_API_KEY){
+    console.error('Please provide DEEPGRAM_API_KEY and GROQ_API_KEY in Secrets')
     process.exit(1);
 }
 
 const app = express();
-
 const server = http.createServer(app)
 const wss = new WebSocket.Server({ server });
 const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
@@ -56,35 +50,43 @@ function log(message) {
   fs.appendFile('./logs.txt', '\n'+text+'\n', (result)=> { console.log(result)});
 }
 
-initialize()
-
-const setupDeepgram = (ws) => {
-  async function playh(responseText){
-    //calling playht main fxn
-    console.time('play_api')
-    const stream = await play(responseText)
-    pl2++
-    sid2++
-    ws.send(JSON.stringify({'type': 'audio_session', 'sid1': sid1, 'sid2': sid2}));
-    //added 
-    if( pl1  === pl2){
-    play_stream(stream)
-    }
-  }
-
-  function play_stream(stream){
-    stream.on("data", (chunk) => {
-        const buffer = Uint8Array.from(chunk).buffer;
+// NEW: Edge TTS function (replaces PlayHT)
+async function speakWithEdgeTTS(responseText, ws) {
+  console.time('edge_tts_api');
+  pl2++;
+  sid2++;
+  ws.send(JSON.stringify({'type': 'audio_session', 'sid1': sid1, 'sid2': sid2}));
+  
+  try {
+    // Use a clear, child-friendly English voice
+    const communicate = new Communicate(responseText, {
+      voice: 'en-US-EmmaMultilingualNeural',  // Clear female US voice, great for kids
+    });
+    
+    const audioChunks = [];
+    for await (const chunk of communicate.stream()) {
+      if (chunk.type === 'audio' && chunk.data) {
+        audioChunks.push(chunk.data);
+        
+        // Send audio chunk to client in real-time
+        const buffer = Buffer.from(chunk.data);
         ws.send(JSON.stringify({
           'type': 'audio',
           'output': Array.from(new Uint8Array(buffer)),
           'sid1': sid1,
           'sid2': sid2
         }));
-      });
-    console.timeEnd('play_api')
+      }
+    }
+    console.timeEnd('edge_tts_api');
+    log(`Edge TTS: Generated ${audioChunks.length} audio chunks`);
+  } catch (error) {
+    console.error('Edge TTS error:', error);
+    log(`Edge TTS error: ${error.message}`);
   }
+}
 
+const setupDeepgram = (ws) => {
   const deepgram = deepgramClient.listen.live({
     language: "en",
     punctuate: true,
@@ -98,21 +100,18 @@ const setupDeepgram = (ws) => {
     deepgram.keepAlive();
   }, 10 * 1000);
 
-
-  //when deepgram is open
   deepgram.addListener(LiveTranscriptionEvents.Open, async () => {
     console.log("deepgram: connected");
-
     
-    //deepgram outputs transcripts  
     deepgram.addListener(LiveTranscriptionEvents.Transcript, async (data) => {
       if (data.is_final && data.channel.alternatives[0].transcript !== "") {
         
         if(count>0){
-        if(sid1 !== sid2){
-          console.log('stopping the audio')
-          ws.send(JSON.stringify({'type': 'audio_stop', 'stop': true}));
-        }}
+          if(sid1 !== sid2){
+            console.log('stopping the audio')
+            ws.send(JSON.stringify({'type': 'audio_stop', 'stop': true}));
+          }
+        }
         count++
         sid1 = count
         pl1++
@@ -125,6 +124,7 @@ const setupDeepgram = (ws) => {
         console.log(caption)
         log(`deepgram_spoken: ${caption}`)
         ws.send(JSON.stringify({'type': 'caption', 'output': JSON.stringify(caption)}));
+        
         const regex = /disconnect/i;
         if (regex.test(caption)) {
           ws.send(JSON.stringify({'type': 'caption', 'output': JSON.stringify('#assistant stopped#')}));
@@ -134,11 +134,11 @@ const setupDeepgram = (ws) => {
         else {
           const responseText = await getGroqChat(caption, stack);
           log(`groq response: ${responseText}`)
-          await playh(responseText)
-          // await neets(responseText)
+          // REPLACED: await playh(responseText)
+          await speakWithEdgeTTS(responseText, ws);
         }
       }
-  });
+    });
 
     deepgram.addListener(LiveTranscriptionEvents.Close, async () => {
       console.log("deepgram: disconnected");
@@ -174,17 +174,14 @@ wss.on("connection", (ws) => {
   let deepgram = setupDeepgram(ws);
 
   ws.on("message", (message) => {
-
-    if (deepgram.getReadyState() === 1 /* OPEN */) {
+    if (deepgram.getReadyState() === 1) {
       deepgram.send(message);
-    } else if (deepgram.getReadyState() >= 2 /* 2 = CLOSING, 3 = CLOSED */) {
+    } else if (deepgram.getReadyState() >= 2) {
       console.log("socket: data couldn't be sent to deepgram");
-      console.log("socket: retrying connection to deepgram");
       log('reattempting to send data')
-      /* Attempt to reopen the Deepgram connection */
       deepgram.finish();
       deepgram.removeAllListeners();
-      deepgram = setupDeepgram(socket);
+      deepgram = setupDeepgram(ws);
     } else {
       console.log("socket: data couldn't be sent to deepgram");
     }
@@ -203,11 +200,6 @@ app.use(express.static("public/"));
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
-
-// ========== THE ONLY CHANGE IS HERE ==========
-// Changed from server.listen(3000) to use PORT from environment
-// This allows Hugging Face Spaces to assign a port automatically
-// =============================================
 
 const PORT = process.env.PORT || 7860;
 server.listen(PORT, '0.0.0.0', () => {
