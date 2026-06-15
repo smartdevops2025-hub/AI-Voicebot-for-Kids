@@ -204,6 +204,12 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
 
-server.listen(3000, () => {
-  console.log("Server is listening on port 3000");
+// ========== THE ONLY CHANGE IS HERE ==========
+// Changed from server.listen(3000) to use PORT from environment
+// This allows Hugging Face Spaces to assign a port automatically
+// =============================================
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`ABBU is running on port ${PORT}`);
 });
