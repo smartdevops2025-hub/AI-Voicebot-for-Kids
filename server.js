@@ -209,7 +209,7 @@ app.get("/", (req, res) => {
 // This allows Hugging Face Spaces to assign a port automatically
 // =============================================
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7860;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`ABBU is running on port ${PORT}`);
 });
