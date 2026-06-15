@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Use the official Node.js 18 image as the base
 FROM node:18-slim
 
