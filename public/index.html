@@ -1,37 +1,643 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>AI Voice Assistant</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+    <title>Abboo - Your Voice Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        /* ===== FULL SCREEN - NO HUGGING FACE UI ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Comic Sans MS', 'Comic Neue', cursive, sans-serif;
+            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 480px;
+            height: 100vh;
+            max-height: 850px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+        
+        /* ===== AVATAR WITH LIP SYNC ===== */
+        .avatar-wrapper {
+            position: relative;
+            width: 260px;
+            height: 260px;
+            margin-bottom: 15px;
+        }
+        
+        .avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid #667eea;
+            box-shadow: 0 0 50px rgba(102,126,234,0.2);
+            transition: all 0.05s ease;
+            background: #2a2a4a;
+        }
+        
+        /* Lip Sync Animation - Image moves like talking */
+        .avatar.talking {
+            animation: talkBounce 0.35s ease-in-out infinite alternate;
+            border-color: #f5576c;
+            box-shadow: 0 0 70px rgba(245,87,108,0.4);
+        }
+        
+        @keyframes talkBounce {
+            0% { transform: scale(1) rotate(-2deg) translateY(0px); }
+            20% { transform: scale(1.03) rotate(-1deg) translateY(-5px); }
+            40% { transform: scale(1.05) rotate(0deg) translateY(-8px); }
+            60% { transform: scale(1.03) rotate(1deg) translateY(-5px); }
+            80% { transform: scale(1.01) rotate(2deg) translateY(-2px); }
+            100% { transform: scale(1) rotate(0deg) translateY(0px); }
+        }
+        
+        /* Glowing ring when speaking */
+        .speaking-ring {
+            position: absolute;
+            top: -12px;
+            left: -12px;
+            right: -12px;
+            bottom: -12px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            z-index: -1;
+            display: none;
+        }
+        .speaking-ring.active {
+            display: block;
+            border-color: #f5576c;
+            animation: ringPulse 0.7s ease-in-out infinite;
+        }
+        @keyframes ringPulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.15); opacity: 0; }
+        }
+        
+        /* ===== STATUS ===== */
+        .status-badge {
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(10px);
+            padding: 6px 20px;
+            border-radius: 30px;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-badge .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: dotPulse 1.5s ease-in-out infinite;
+        }
+        .status-badge .dot.inactive {
+            background: #555;
+            animation: none;
+        }
+        @keyframes dotPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.7); }
+        }
+        
+        /* ===== NAME ===== */
+        h1 {
+            font-size: 38px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2px;
+        }
+        .subtitle {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        /* ===== MESSAGE BOX ===== */
+        .message-box {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            padding: 14px 18px;
+            border-radius: 18px;
+            width: 100%;
+            min-height: 55px;
+            text-align: center;
+            font-size: 15px;
+            color: #ccc;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.5;
+        }
+        .message-box .highlight {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        /* ===== MIC BUTTON ===== */
+        .mic-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 8px 25px rgba(102,126,234,0.3);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 5px 0;
+        }
+        .mic-btn:active { transform: scale(0.9); }
+        .mic-btn.listening {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            animation: micPulse 1s ease-in-out infinite;
+        }
+        @keyframes micPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245,87,108,0.4); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(245,87,108,0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245,87,108,0); }
+        }
+        
+        /* ===== RESPONSE TEXT ===== */
+        .response-box {
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+            padding: 10px 14px;
+            width: 100%;
+            min-height: 45px;
+            font-size: 13px;
+            color: #999;
+            border-left: 3px solid #667eea;
+            margin-top: 10px;
+            overflow-y: auto;
+            max-height: 70px;
+            text-align: left;
+        }
+        .response-box .label {
+            font-size: 10px;
+            color: #667eea;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #responseText {
+            margin-top: 3px;
+            color: #ddd;
+            font-size: 14px;
+        }
+        
+        /* ===== DEBUG (Hidden by default) ===== */
+        .debug-log {
+            display: none;
+        }
+        
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 480px) {
+            .avatar-wrapper { width: 200px; height: 200px; }
+            h1 { font-size: 30px; }
+            .mic-btn { width: 60px; height: 60px; font-size: 26px; }
+            .message-box { font-size: 14px; padding: 12px 14px; }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="image-section">
-      <img src="teddy.gif" alt="Fun Image" class="fun-image" />
-    </div>
-    <div class="recording-section">
-      <div class="box">
-        <div class="object" id="record">
-          <div class="outline"></div>
-          <div class="outline" id="delayed"></div>
-          <div class="button"></div>
-          <audio id="myAudio" autoplay></audio>
-          <div class="button" id="circlein">
-            <svg class="mic-icon" version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 1000 1000" enable-background="new 0 0 1000 1000" xml:space="preserve">
-              <g>
-                <path d="M500,683.8c84.6,0,153.1-68.6,153.1-153.1V163.1C653.1,78.6,584.6,10,500,10c-84.6,0-153.1,68.6-153.1,153.1v367.5C346.9,615.2,415.4,683.8,500,683.8z M714.4,438.8v91.9C714.4,649,618.4,745,500,745c-118.4,0-214.4-96-214.4-214.4v-91.9h-61.3v91.9c0,141.9,107.2,258.7,245,273.9v124.2H346.9V990h306.3v-61.3H530.6V804.5c137.8-15.2,245-132.1,245-273.9v-91.9H714.4z"/>
-              </g>
-            </svg>
-          </div>
+    <div class="container">
+        <!-- AVATAR -->
+        <div class="avatar-wrapper">
+            <div class="speaking-ring" id="speakingRing"></div>
+            <img src="qq.jpg" class="avatar" id="avatarImg" alt="ABBU" 
+                 onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'">
         </div>
-      </div>
-      <div class="captions" id="captions">
-        <span>Captions</span>
-      </div>
+        
+        <!-- NAME -->
+        <h1>Abboo</h1>
+        <div class="subtitle">Your Voice Assistant</div>
+        
+        <!-- STATUS -->
+        <div class="status-badge" id="statusBadge">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">Always Listening</span>
+        </div>
+        
+        <!-- MESSAGE -->
+        <div class="message-box" id="messageBox">
+            👋 <span id="messageText">Say <span class="highlight">"Abboo"</span> to talk to me!</span>
+        </div>
+        
+        <!-- MIC BUTTON -->
+        <button class="mic-btn" id="micBtn">🎤</button>
+        
+        <!-- RESPONSE -->
+        <div class="response-box">
+            <div class="label">Abboo says:</div>
+            <div id="responseText">Say "Abboo" and ask me anything!</div>
+        </div>
+        
+        <!-- DEBUG (hidden) -->
+        <div class="debug-log" id="debugLog"></div>
     </div>
-  </div>
-  <script src="client.js"></script>
+
+    <script>
+        // ========== DOM Elements ==========
+        const avatarImg = document.getElementById('avatarImg');
+        const speakingRing = document.getElementById('speakingRing');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const messageText = document.getElementById('messageText');
+        const messageBox = document.getElementById('messageBox');
+        const responseText = document.getElementById('responseText');
+        const micBtn = document.getElementById('micBtn');
+        
+        // ========== State ==========
+        let socket = null;
+        let mediaRecorder = null;
+        let isRecording = false;
+        let isConnected = false;
+        let isProcessing = false;
+        let isSpeaking = false;
+        let wakeWordDetector = null;
+        let currentUtterance = null;
+        let mouthInterval = null;
+        let welcomeSpoken = false;
+        
+        // ========== UI Updates ==========
+        function setStatus(text, isActive) {
+            statusText.textContent = text;
+            statusDot.className = 'dot';
+            if (!isActive) statusDot.classList.add('inactive');
+        }
+        
+        function setMessage(text, isHtml) {
+            if (isHtml) {
+                messageText.innerHTML = text;
+            } else {
+                messageText.textContent = text;
+            }
+        }
+        
+        function updateResponseText(text) {
+            responseText.textContent = text;
+        }
+        
+        function setAvatarTalking(isTalking) {
+            if (isTalking) {
+                avatarImg.classList.add('talking');
+                speakingRing.classList.add('active');
+                setStatus('Speaking...', true);
+            } else {
+                avatarImg.classList.remove('talking');
+                speakingRing.classList.remove('active');
+                setStatus('Always Listening', true);
+            }
+        }
+        
+        // ========== Lip Sync Animation ==========
+        function startLipSync() {
+            if (isSpeaking) return;
+            isSpeaking = true;
+            setAvatarTalking(true);
+            
+            // Random mouth movement
+            if (mouthInterval) clearInterval(mouthInterval);
+            let count = 0;
+            mouthInterval = setInterval(() => {
+                count++;
+                const scale = 1 + Math.sin(count * 0.35) * 0.025;
+                const rotate = Math.sin(count * 0.2) * 1.5;
+                avatarImg.style.transform = `scale(${scale}) rotate(${rotate}deg)`;
+            }, 80);
+        }
+        
+        function stopLipSync() {
+            isSpeaking = false;
+            setAvatarTalking(false);
+            avatarImg.style.transform = 'scale(1) rotate(0deg)';
+            if (mouthInterval) {
+                clearInterval(mouthInterval);
+                mouthInterval = null;
+            }
+        }
+        
+        // ========== Speak with Browser TTS ==========
+        function speakText(text) {
+            if (!text || text.length === 0) return;
+            
+            // Cancel any ongoing speech
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+            
+            updateResponseText(text);
+            setMessage('🔊 ' + text, false);
+            startLipSync();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.85;
+            utterance.pitch = 1.1;
+            utterance.lang = 'en-US';
+            
+            // Find a good voice
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find(v => v.lang === 'en-US' && v.name.includes('Google UK')) ||
+                             voices.find(v => v.lang === 'en-US');
+            if (preferred) utterance.voice = preferred;
+            
+            utterance.onend = () => {
+                stopLipSync();
+                resetState();
+                setMessage('👋 Say <span class="highlight">"Abboo"</span> to talk to me!', true);
+            };
+            
+            utterance.onerror = () => {
+                stopLipSync();
+                resetState();
+            };
+            
+            window.speechSynthesis.speak(utterance);
+        }
+        
+        // ========== State Management ==========
+        function resetState() {
+            isProcessing = false;
+            isRecording = false;
+            micBtn.classList.remove('listening');
+            setStatus('Always Listening', true);
+            // Restart wake word
+            if (!wakeWordDetector) {
+                startWakeWordDetection();
+            }
+        }
+        
+        // ========== Wake Word Detection ==========
+        function startWakeWordDetection() {
+            if (wakeWordDetector) {
+                try { wakeWordDetector.stop(); } catch(e) {}
+                wakeWordDetector = null;
+            }
+            
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                setMessage('⚠️ Wake word requires Chrome browser', false);
+                return;
+            }
+            
+            try {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                wakeWordDetector = new SpeechRecognition();
+                wakeWordDetector.continuous = true;
+                wakeWordDetector.interimResults = true;
+                wakeWordDetector.lang = 'en-US';
+                
+                wakeWordDetector.onresult = (event) => {
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                        console.log('🎯 Heard:', transcript);
+                        
+                        if (transcript.includes('abboo') || transcript.includes('abbu') || 
+                            transcript.includes('aboo') || transcript.includes('abou')) {
+                            if (!isRecording && !isProcessing && !isSpeaking) {
+                                console.log('🎯 Wake word detected!');
+                                setMessage('🎯 Wake word detected! Listening...', false);
+                                setStatus('Listening...', true);
+                                
+                                // Stop wake word
+                                try { wakeWordDetector.stop(); } catch(e) {}
+                                wakeWordDetector = null;
+                                
+                                // Start recording
+                                setTimeout(() => {
+                                    startRecording();
+                                }, 400);
+                                break;
+                            }
+                        }
+                    }
+                };
+                
+                wakeWordDetector.onerror = (event) => {
+                    console.error('Wake word error:', event.error);
+                    if (event.error === 'not-allowed') {
+                        setMessage('❌ Please allow microphone access', false);
+                    }
+                    // Restart after error
+                    setTimeout(startWakeWordDetection, 3000);
+                };
+                
+                wakeWordDetector.start();
+                setStatus('Always Listening', true);
+                setMessage('👋 Say <span class="highlight">"Abboo"</span> to talk to me!', true);
+                console.log('🎤 Wake word started');
+                
+            } catch (err) {
+                console.error('Wake word error:', err);
+                setTimeout(startWakeWordDetection, 5000);
+            }
+        }
+        
+        // ========== Recording ==========
+        async function startRecording() {
+            if (!isConnected) {
+                setMessage('❌ Not connected. Please wait...', false);
+                return;
+            }
+            
+            if (isRecording || isProcessing || isSpeaking) {
+                console.log('⚠️ Already busy');
+                return;
+            }
+            
+            console.log('🎤 Starting recording...');
+            setMessage('🎙️ Listening... Speak now!', false);
+            setStatus('Recording...', true);
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+                });
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) chunks.push(e.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            console.log('📤 Sending audio:', reader.result.byteLength, 'bytes');
+                            socket.send(reader.result);
+                            setMessage('📝 Processing your question...', false);
+                            setStatus('Processing...', true);
+                            isProcessing = true;
+                            updateResponseText('...');
+                        };
+                        reader.readAsArrayBuffer(blob);
+                    } else {
+                        setMessage('❌ Connection lost. Please refresh.', false);
+                    }
+                    stream.getTracks().forEach(t => t.stop());
+                    isRecording = false;
+                    micBtn.classList.remove('listening');
+                };
+                
+                mediaRecorder.start(1000);
+                isRecording = true;
+                micBtn.classList.add('listening');
+                setStatus('Listening...', true);
+                
+                // Auto-stop after 6 seconds
+                setTimeout(() => {
+                    if (isRecording) {
+                        console.log('⏱️ Auto-stopping');
+                        stopRecording();
+                    }
+                }, 6000);
+                
+            } catch (err) {
+                console.error('Microphone error:', err);
+                setMessage('❌ Please allow microphone access', false);
+                setStatus('Error', false);
+                resetState();
+            }
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                console.log('⏹️ Stopping recording');
+                mediaRecorder.stop();
+                isRecording = false;
+                micBtn.classList.remove('listening');
+            }
+        }
+        
+        // ========== WebSocket ==========
+        function connectWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/`;
+            console.log('🔌 Connecting to WebSocket');
+            
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = () => {
+                console.log('✅ WebSocket connected!');
+                isConnected = true;
+                setMessage('👋 Say <span class="highlight">"Abboo"</span> to talk to me!', true);
+                setStatus('Always Listening', true);
+                startWakeWordDetection();
+            };
+            
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('📨 Received:', data.type);
+                    
+                    if (data.type === 'caption') {
+                        const text = JSON.parse(data.output);
+                        console.log('💬 Response:', text.substring(0, 40) + '...');
+                        speakText(text);
+                    }
+                    else if (data.type === 'audio_session') {
+                        console.log('🔊 Audio session:', data);
+                    }
+                    else if (data.type === 'audio_stop') {
+                        console.log('⏹️ Audio stop');
+                        stopLipSync();
+                        resetState();
+                        setMessage('👋 Say <span class="highlight">"Abboo"</span> to talk to me!', true);
+                    }
+                } catch (err) {
+                    console.error('Error:', err);
+                }
+            };
+            
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setMessage('❌ Connection error. Refreshing...', false);
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            socket.onclose = () => {
+                console.log('⚠️ WebSocket disconnected');
+                isConnected = false;
+                setMessage('⚠️ Reconnecting...', false);
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+        
+        // ========== Mic Button (Manual Fallback) ==========
+        micBtn.onclick = () => {
+            console.log('🖱️ Mic button clicked');
+            if (isRecording) {
+                stopRecording();
+            } else {
+                // Stop wake word temporarily
+                if (wakeWordDetector) {
+                    try { wakeWordDetector.stop(); } catch(e) {}
+                    wakeWordDetector = null;
+                }
+                startRecording();
+            }
+        };
+        
+        // ========== Welcome Message (Only Once) ==========
+        function speakWelcome() {
+            if (welcomeSpoken) return;
+            welcomeSpoken = true;
+            
+            if ('speechSynthesis' in window) {
+                setTimeout(() => {
+                    const msg = new SpeechSynthesisUtterance("Hello Saahil! I am Abboo. Say Abboo to talk to me.");
+                    msg.rate = 0.85;
+                    msg.pitch = 1.1;
+                    window.speechSynthesis.speak(msg);
+                    console.log('🗣️ Welcome spoken');
+                }, 800);
+            }
+        }
+        
+        // ========== INIT ==========
+        console.log('🚀 ABBU initializing...');
+        connectWebSocket();
+        speakWelcome();
+        
+        // Preload voices
+        setTimeout(() => {
+            window.speechSynthesis.getVoices();
+        }, 500);
+    </script>
 </body>
 </html>
